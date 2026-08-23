@@ -1,0 +1,8 @@
+---
+id: dynamicdashboard
+name: Dynamic Dashboard
+summary: A clock-first dashboard that tiles active signals
+desc: Shows the current time and dynamically makes room for Spotify playback, upcoming precipitation, and live games for followed teams.
+author: Rob Keys
+fileName: dynamic_dashboard.star
+packageName: dynamicdashboard
