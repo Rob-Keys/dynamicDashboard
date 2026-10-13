@@ -16,12 +16,18 @@ four tiles.
 
 ![App preview](dynamic_dashboard.gif)
 
+Layout animation:
+
+![Dashboard layouts](dynamic_dashboard_layouts.gif)
+
 ## Current implementation
 
 - Clock: implemented; uses the Tidbyt timezone (`$tz`) and a 24-hour digital
   display.
 - Tiling: implemented in `dynamic_dashboard.star`; deterministic for one
   through four active items, with geometry tests in `tests/test_layout.py`.
+- Layout preview: implemented as `demo_mode=true`, which cycles through all
+  four supported layouts without making provider requests.
 - Weather: implemented for US National Weather Service locations. It adds a
   tile when one of the next six hourly periods has precipitation probability
   or a precipitation forecast.
@@ -56,6 +62,9 @@ With Pixlet `v0.34.0` or newer installed:
 ```sh
 pixlet render dynamic_dashboard.star
 pixlet serve dynamic_dashboard.star
+
+# Render the 1-, 2-, 3-, and 4-tile layout preview from the real app
+pixlet render --gif --max_duration 15000 --output dynamic_dashboard_layouts.gif dynamic_dashboard.star demo_mode=true
 ```
 
 The repository also contains a small geometry test that does not require

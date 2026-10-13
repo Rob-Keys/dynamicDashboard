@@ -88,6 +88,9 @@ def main(config):
     timezone = config.get("$tz", "America/New_York")
     now = time.now().in_location(timezone)
 
+    if config.bool("demo_mode", False):
+        return render_layout_preview()
+
     # The clock is the one invariant item. Everything else is opt-in and
     # fail-soft so a provider outage never removes the clock.
     tiles = [{
@@ -143,6 +146,65 @@ def main(config):
             child = render.Stack(children = children),
         ),
     )
+
+def render_layout_preview():
+    """Render every supported layout for the README preview GIF."""
+    return render.Root(
+        delay = 1800,
+        show_full_animation = True,
+        child = render.Animation(children = [
+            layout_preview_frame(1),
+            layout_preview_frame(2),
+            layout_preview_frame(3),
+            layout_preview_frame(4),
+        ]),
+    )
+
+def layout_preview_frame(count):
+    items = [
+        {"label": "CLOCK", "detail": "12:34", "color": "#070a12"},
+        {"label": "MUSIC", "detail": "PLAY", "color": "#07140c"},
+        {"label": "RAIN", "detail": "24%", "color": "#07121e"},
+        {"label": "LIVE", "detail": "NYR 3", "color": "#180b0b"},
+    ][:count]
+    rectangles = layout_for_count(count)
+    children = []
+    for index in range(count):
+        rect = rectangles[index]
+        item = items[index]
+        tile = render.Box(
+            width = rect["width"],
+            height = rect["height"],
+            color = item["color"],
+            child = render.Column(
+                expanded = True,
+                main_align = "center",
+                cross_align = "center",
+                children = [
+                    render.Text(content = item["label"], font = "tom-thumb", color = preview_label_color(index)),
+                    render.Text(content = item["detail"], font = "6x13" if count == 1 else "5x8", color = TEXT),
+                ],
+            ),
+        )
+        children.append(render.Padding(
+            child = tile,
+            pad = (
+                rect["x"],
+                rect["y"],
+                WIDTH - rect["x"] - rect["width"],
+                HEIGHT - rect["y"] - rect["height"],
+            ),
+        ))
+    return render.Box(
+        width = WIDTH,
+        height = HEIGHT,
+        color = BACKGROUND,
+        child = render.Stack(children = children),
+    )
+
+def preview_label_color(index):
+    colors = [TEXT, GREEN, BLUE, RED]
+    return colors[index]
 
 def render_tile(tile, rect):
     width = rect["width"]
@@ -385,6 +447,13 @@ def get_schema():
                 name = "Dashboard location",
                 desc = "Location used for the precipitation tile.",
                 icon = "locationDot",
+            ),
+            schema.Toggle(
+                id = "demo_mode",
+                name = "Layout preview mode",
+                desc = "Cycle through the one-, two-, three-, and four-tile layouts.",
+                icon = "play",
+                default = False,
             ),
             schema.Text(
                 id = "spotify_access_token",
