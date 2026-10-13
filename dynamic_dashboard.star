@@ -54,6 +54,7 @@ GREEN = "#1ed760"
 BLUE = "#6db5ff"
 YELLOW = "#ffd166"
 RED = "#ff6b6b"
+HEX_DIGITS = "0123456789ABCDEF"
 
 DEFAULT_LOCATION = """
 {
@@ -89,13 +90,17 @@ def main(config):
     now = time.now().in_location(timezone)
 
     if config.bool("demo_mode", False):
-        return render_layout_preview()
+        return render_layout_preview(config.str("clock_style", "custom"))
 
     # The clock is the one invariant item. Everything else is opt-in and
     # fail-soft so a provider outage never removes the clock.
     tiles = [{
         "kind": "clock",
         "time": now.format("15:04"),
+        "hour": now.hour,
+        "minute": now.minute,
+        "second": now.second,
+        "style": config.str("clock_style", "custom"),
     }]
 
     spotify = spotify_now_playing(config.str("spotify_access_token", ""))
@@ -147,45 +152,31 @@ def main(config):
         ),
     )
 
-def render_layout_preview():
+def render_layout_preview(clock_style = "custom"):
     """Render every supported layout for the README preview GIF."""
+    styles = ["custom", "hexcolor", "binary"] if clock_style == "all" else [clock_style]
+    frames = []
+    for style in styles:
+        for count in range(1, MAX_TILES + 1):
+            frames.append(layout_preview_frame(count, style))
     return render.Root(
-        delay = 1800,
+        delay = 1000 if clock_style == "all" else 1800,
         show_full_animation = True,
-        child = render.Animation(children = [
-            layout_preview_frame(1),
-            layout_preview_frame(2),
-            layout_preview_frame(3),
-            layout_preview_frame(4),
-        ]),
+        child = render.Animation(children = frames),
     )
 
-def layout_preview_frame(count):
+def layout_preview_frame(count, clock_style = "custom"):
     items = [
-        {"label": "CLOCK", "detail": "12:34", "color": "#070a12"},
-        {"label": "MUSIC", "detail": "PLAY", "color": "#07140c"},
-        {"label": "RAIN", "detail": "24%", "color": "#07121e"},
-        {"label": "LIVE", "detail": "NYR 3", "color": "#180b0b"},
+        {"kind": "clock", "time": "12:34", "hour": 12, "minute": 34, "second": 0, "style": clock_style},
+        {"kind": "spotify", "title": "Midnight City", "artist": "M83", "progress": 0.62},
+        {"kind": "weather", "label": "RAIN", "probability": 24, "when": "+2H"},
+        {"kind": "sports", "league": "NHL", "away": "NYR", "away_score": "3", "home": "BOS", "home_score": "2"},
     ][:count]
     rectangles = layout_for_count(count)
     children = []
     for index in range(count):
         rect = rectangles[index]
-        item = items[index]
-        tile = render.Box(
-            width = rect["width"],
-            height = rect["height"],
-            color = item["color"],
-            child = render.Column(
-                expanded = True,
-                main_align = "center",
-                cross_align = "center",
-                children = [
-                    render.Text(content = item["label"], font = "tom-thumb", color = preview_label_color(index)),
-                    render.Text(content = item["detail"], font = "6x13" if count == 1 else "5x8", color = TEXT),
-                ],
-            ),
-        )
+        tile = render_tile(items[index], rect)
         children.append(render.Padding(
             child = tile,
             pad = (
@@ -202,17 +193,13 @@ def layout_preview_frame(count):
         child = render.Stack(children = children),
     )
 
-def preview_label_color(index):
-    colors = [TEXT, GREEN, BLUE, RED]
-    return colors[index]
-
 def render_tile(tile, rect):
     width = rect["width"]
     height = rect["height"]
     kind = tile["kind"]
 
     if kind == "clock":
-        content = render_clock(tile["time"], width, height)
+        content = render_clock(tile, width, height)
     elif kind == "spotify":
         content = render_spotify(tile, width, height)
     elif kind == "weather":
@@ -244,24 +231,113 @@ def centered(children):
         children = children,
     )
 
-def render_clock(time_text, width, height):
-    # The same digital clock remains legible in both full-screen and quarter
-    # layouts; 6x13 is approximately 30x13 for the five-character time.
+def render_clock(tile, width, height):
+    """Render the selected compact clock adaptation in the allocated tile.
+
+    Community applets are full-canvas entrypoints rather than embeddable
+    plugins, so these small renderers reuse their visual approaches while
+    honoring the dashboard tile's dimensions.
+    """
+    style = tile.get("style", "custom")
+    if style == "hexcolor":
+        color, foreground = clock_color(tile["hour"], tile["minute"], tile.get("second", 0))
+        return render.Box(
+            width = width,
+            height = height,
+            color = color,
+            child = centered([
+                render.Text(content = tile["time"], font = "6x13", color = foreground),
+            ]),
+        )
+    if style == "binary":
+        return render_binary_clock(tile["hour"], tile["minute"], width, height)
+    # Adapted from the community Custom Clock. Use its compact font in quarter
+    # tiles and scale up where the allocated tile permits it.
+    font = "10x20" if width >= 64 else ("6x13" if height >= 32 else "5x8")
     return centered([
-        render.Text(content = time_text, font = "6x13", color = TEXT),
+        render.Text(content = tile["time"], font = font, color = TEXT),
+    ])
+
+def clock_color(hour, minute, second):
+    """Return the current time-derived color used by Hex Color Clock."""
+    red = int((hour + minute / 60.0 + second / 3600.0) / 24.0 * 255)
+    green = int((minute + second / 60.0) / 60.0 * 255)
+    blue = int(second / 60.0 * 255)
+    color = "#%s%s%s" % (hex_byte(red), hex_byte(green), hex_byte(blue))
+    luminance = red * 0.28 + green * 0.48 + blue * 0.24
+    return (color, "#000000" if luminance > 80 else "#FFFFFF")
+
+def hex_byte(value):
+    value = max(0, min(255, value))
+    return HEX_DIGITS[value // 16] + HEX_DIGITS[value % 16]
+
+def render_binary_clock(hour, minute, width, height):
+    """Compact HH:MM binary-digit adaptation of the community Binary Clock."""
+    digits = [hour // 10, hour % 10, minute // 10, minute % 10]
+    cell_width = 5
+    cell_height = 3 if height <= 16 else 4
+    columns = []
+    for index in range(len(digits)):
+        cells = []
+        for bit in range(4):
+            on = (digits[index] >> (3 - bit)) & 1
+            cells.append(render.Box(
+                width = cell_width,
+                height = cell_height,
+                color = BLUE if on else "#263044",
+            ))
+        columns.append(render.Column(
+            main_align = "center",
+            cross_align = "center",
+            children = cells,
+        ))
+        if index == 1:
+            columns.append(render.Text(content = ":", font = "tom-thumb", color = MUTED))
+    return centered([
+        render.Row(
+            main_align = "center",
+            cross_align = "center",
+            children = columns,
+        ),
     ])
 
 def render_spotify(tile, width, height):
+    progress = tile.get("progress", -1)
+    progress_bar = render_progress_bar(progress, width)
     if height <= 16:
-        return centered([
-            render.Text(content = "MUSIC", font = "tom-thumb", color = GREEN),
-            render.Text(content = clip(tile["title"], 9), font = "tom-thumb", color = TEXT),
-        ])
-    return centered([
-        render.Text(content = "SPOTIFY", font = "tom-thumb", color = GREEN),
-        render.Text(content = clip(tile["title"], 12), font = "tom-thumb", color = TEXT),
-        render.Text(content = clip(tile["artist"], 12), font = "tom-thumb", color = MUTED),
-    ])
+        return render.Column(
+            expanded = True,
+            main_align = "space_evenly",
+            cross_align = "center",
+            children = [
+                render.Text(content = clip(tile["title"], 10), font = "tom-thumb", color = TEXT),
+                progress_bar,
+            ],
+        )
+    return render.Column(
+        expanded = True,
+        main_align = "space_evenly",
+        cross_align = "center",
+        children = [
+            render.Text(content = "SPOTIFY", font = "tom-thumb", color = GREEN),
+            render.Text(content = clip(tile["title"], 12), font = "tom-thumb", color = TEXT),
+            render.Text(content = clip(tile["artist"], 12), font = "tom-thumb", color = MUTED),
+            progress_bar,
+        ],
+    )
+
+def render_progress_bar(progress, width):
+    """Small, single-item progress-bar adaptation for active Spotify playback."""
+    inner_width = max(2, width - 8)
+    if progress <= 0:
+        return render.Box(width = inner_width, height = 2, color = "#263044")
+    filled = max(1, min(inner_width, int(inner_width * min(progress, 1.0))))
+    return render.Box(
+        width = inner_width,
+        height = 2,
+        color = "#263044",
+        child = render.Box(width = filled, height = 2, color = GREEN),
+    )
 
 def render_weather(tile, width, height):
     return centered([
@@ -310,10 +386,13 @@ def spotify_now_playing(access_token):
     item = data["item"]
     artists = item.get("artists", [])
     artist = artists[0].get("name", "") if artists else ""
+    duration = int(item.get("duration_ms", 0))
+    progress_ms = int(data.get("progress_ms", 0))
     return {
         "kind": "spotify",
         "title": item.get("name", "Now playing"),
         "artist": artist,
+        "progress": float(progress_ms) / duration if duration > 0 else -1,
     }
 
 def upcoming_precipitation(location):
@@ -454,6 +533,18 @@ def get_schema():
                 desc = "Cycle through the one-, two-, three-, and four-tile layouts.",
                 icon = "play",
                 default = False,
+            ),
+            schema.Dropdown(
+                id = "clock_style",
+                name = "Clock style",
+                desc = "Choose a compact clock renderer adapted from community app designs.",
+                icon = "clock",
+                default = "custom",
+                options = [
+                    schema.Option(display = "Custom Clock · clean digital", value = "custom"),
+                    schema.Option(display = "Hex Color Clock · color-changing", value = "hexcolor"),
+                    schema.Option(display = "Binary Clock · pixel digits", value = "binary"),
+                ],
             ),
             schema.Text(
                 id = "spotify_access_token",

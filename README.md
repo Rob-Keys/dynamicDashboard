@@ -20,10 +20,17 @@ Layout animation:
 
 ![Dashboard layouts](dynamic_dashboard_layouts.gif)
 
+The animation cycles through Custom Clock, Hex Color Clock, and Binary Clock
+styles, showing each style across the supported layouts. Choose the clock
+style in the app settings; the default Custom Clock renderer uses a compact
+5x8 `HH:MM` face in quarter tiles and scales up when more room is available.
+
 ## Current implementation
 
-- Clock: implemented; uses the Tidbyt timezone (`$tz`) and a 24-hour digital
-  display.
+- Clock: implemented; uses the Tidbyt timezone (`$tz`) and offers three
+  selectable compact renderers: Custom Clock (clean digital), Hex Color Clock
+  (time-derived color), and Binary Clock (binary digits). The tile renderer
+  adapts font and layout to the allocated tile size.
 - Tiling: implemented in `dynamic_dashboard.star`; deterministic for one
   through four active items, with geometry tests in `tests/test_layout.py`.
 - Layout preview: implemented as `demo_mode=true`, which cycles through all
@@ -34,11 +41,23 @@ Layout animation:
 - Sports: implemented with ESPN's public scoreboard endpoints for NFL, NBA,
   MLB, NHL, and MLS. It adds the first live game matching a configured team.
 - Spotify playback: implemented against `/v1/me/player` when a valid bearer
-  token is supplied.
+  token is supplied. The tile includes a compact playback progress bar when
+  Spotify reports track duration and progress.
 
 All non-successful provider responses are intentionally fail-soft: the clock
 remains visible. Provider results are cached with short TTLs so the app does
 not fetch on every render.
+
+## Community app adaptations
+
+Community Tidbyt applets are standalone Pixlet entrypoints, not widgets that
+can be loaded directly into another app. The three clock choices above adapt
+the render styles from [Custom Clock](../community/apps/customclock/custom_clock.star),
+[Hex Color Clock](../community/apps/hexcolorclock/hex_color_clock.star), and
+[Binary Clock](../community/apps/binaryclock/binary_clock.star) into
+dimension-aware dashboard renderers. Spotify's progress bar is a compact
+single-item adaptation of [Any Progressbar](../community/apps/anyprogressbar/any_progressbar.star).
+This keeps the dashboard self-contained while retaining recognizable designs.
 
 ## Explicit stubs and limitations
 
@@ -63,8 +82,8 @@ With Pixlet `v0.34.0` or newer installed:
 pixlet render dynamic_dashboard.star
 pixlet serve dynamic_dashboard.star
 
-# Render the 1-, 2-, 3-, and 4-tile layout preview from the real app
-pixlet render --gif --max_duration 15000 --output dynamic_dashboard_layouts.gif dynamic_dashboard.star demo_mode=true
+# Preview all three community-inspired clock styles across all layouts
+pixlet render --gif --max_duration 15000 --output dynamic_dashboard_layouts.gif dynamic_dashboard.star demo_mode=true clock_style=all
 ```
 
 The repository also contains a small geometry test that does not require
