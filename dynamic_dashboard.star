@@ -9,7 +9,40 @@ load("http.star", "http")
 load("render.star", "render")
 load("schema.star", "schema")
 load("time.star", "time")
-load("layout.star", "CANVAS_WIDTH", "CANVAS_HEIGHT", "MAX_TILES", "layout_for_count")
+
+CANVAS_WIDTH = 64
+CANVAS_HEIGHT = 32
+MAX_TILES = 4
+
+def _rect(x, y, width, height):
+    return {
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": height,
+    }
+
+def layout_for_count(count):
+    """Return the stable one-through-four tile geometry."""
+    if count <= 1:
+        return [_rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)]
+    if count == 2:
+        return [
+            _rect(0, 0, 32, CANVAS_HEIGHT),
+            _rect(32, 0, 32, CANVAS_HEIGHT),
+        ]
+    if count == 3:
+        return [
+            _rect(0, 0, 32, 16),
+            _rect(32, 0, 32, 16),
+            _rect(0, 16, CANVAS_WIDTH, 16),
+        ]
+    return [
+        _rect(0, 0, 32, 16),
+        _rect(32, 0, 32, 16),
+        _rect(0, 16, 32, 16),
+        _rect(32, 16, 32, 16),
+    ]
 
 WIDTH = CANVAS_WIDTH
 HEIGHT = CANVAS_HEIGHT

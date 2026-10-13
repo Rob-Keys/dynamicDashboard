@@ -14,12 +14,14 @@ signal is active:
 The current item order is clock, Spotify, weather, then sports. The maximum is
 four tiles.
 
+![App preview](dynamic_dashboard.gif)
+
 ## Current implementation
 
 - Clock: implemented; uses the Tidbyt timezone (`$tz`) and a 24-hour digital
   display.
-- Tiling: implemented in `layout.star`; deterministic for one through four
-  active items.
+- Tiling: implemented in `dynamic_dashboard.star`; deterministic for one
+  through four active items, with geometry tests in `tests/test_layout.py`.
 - Weather: implemented for US National Weather Service locations. It adds a
   tile when one of the next six hourly periods has precipitation probability
   or a precipitation forecast.
